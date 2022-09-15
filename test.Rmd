@@ -1,0 +1,124 @@
+---
+title: "DExMA"
+author: "zhankuijun"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# 创建对象objectMA
+
+```r
+library(DExMA)
+data("DExMAExampleData") # 导入数据
+ls(listMatrixEX)
+head(listMatrixEX$Study1)
+head(listPhenodatas$Study1)
+listExpressionSets$Study1
+# 创建分组变量
+phenoGroups = c("condition", "condition", "state", "state") #namePheno
+phenoCases = list(
+  Study1 = "Diseased", 
+  Study2 = c("Diseased", "ill"),
+  Study3 = "Diseased", 
+  Study4 = "ill") #expGroups
+phenoControls = list(
+  Study1 = "Healthy", 
+  Study2 = c("Healthy", "control"),
+  Study3 = "Healthy", 
+  Study4 = "control") #refGroups
+listPhenodatas$Study1
+listPhenodatas$Study2
+listPhenodatas$Study3
+listPhenodatas$Study4
+
+
+# 创建objectMA对象
+newObjectMA <- createObjectMA(
+  listEX=listMatrixEX,
+  listPheno =listPhenodatas, 
+  namePheno=phenoGroups,
+  expGroups=phenoCases,
+  refGroups = phenoControls)
+head(newObjectMA[[4]][[1]])
+newObjectMA[[1]][[2]]
+# 添加object对象的元素
+newElem <-elementObjectMA(expressionMatrix = ExpressionSetStudy5,
+                          groupPheno = "condition",
+                          expGroup = c("Diseased", "ill"),
+                          refGroup = c("Healthy", "control"))
+head(newElem[[1]])
+newObjectMA2 <- newObjectMA
+newObjectMA2[[5]] <- newElem
+```
+
+# 注释和质控
+
+```r
+rownames(newObjectMA$Study1$mExpres)[1:20]
+# 查看转换函数支持的字段
+head(avaliableIDs)
+avaliableOrganism
+# allSameID()函数统一geneID
+newObjectMA <- allSameID(newObjectMA, finalID="GeneSymbol",
+                         organism = "Homo sapiens")
+rownames(newObjectMA$Study1$mExpres)[1:20]
+
+# 对数转换
+newObjectMA <- dataLog(newObjectMA)
+# 异质性检验
+heterogeneityTest(newObjectMA)#tau2是每个基因的tau2的分布函数
+
+# 缺失值插补
+nrow(newObjectMA$Study1[[1]])
+imputation<- missGenesImput(newObjectMA, k =7) #KNN插补缺失值
+maObject_imput <- imputation$objectMA          #提插补后的objectMA
+nrow(maObject_imput$Study1[[1]])
+head(imputation$imputIndicators$imputValuesSample)#填补情况
+
+```
+
+# meta计算
+
+```r
+# 合并效应值
+resultsMA <- metaAnalysisDE(newObjectMA, typeMethod="REM",
+                            missAllow=0.3, proportionData=0.50)# 计算
+resultsMA[1:6,]
+# 合并p值
+resultsPV <- metaAnalysisDE(newObjectMA, typeMethod="maxP",
+                            proportionData=0.5)
+head(resultsPV)
+# 可视化
+makeHeatmap(objectMA=newObjectMA, resMA=resultsMA, scaling = "zscor",
+            regulation = "all", typeMethod="REM", numSig=20)
+```
+
+# 去除批次效应
+```r
+library(swamp)
+pheno <- listPhenodatas$Study2
+#删除无用的分组信息？
+pheno <- pheno[,apply(pheno,2,function(x) length(table(x)))>1]
+# 字符转因子？
+pheno <- data.frame(apply(pheno, 2, factor), stringsAsFactors = TRUE)
+res_prince <- prince(listMatrixEX$Study2,pheno,top=ncol(listMatrixEX$Study2))
+prince.plot(res_prince,note=TRUE , notecex=0.5)
+listMatrixEX$Study2 <- batchRemove(listMatrixEX$Study2, listPhenodatas$Study2,
+                                   formula=~gender+race,mainCov = "race",
+                                   nameGroup="condition")
+head(listMatrixEX$Study2)
+prince.plot(res_prince,note=TRUE , notecex=0.5)
+```
+
+# 计算
+
+```r
+# 计算效应值
+effects <- calculateES(newObjectMA)
+head(effects$ES)
+head(effects$Var)
+# 计算
+pvalues <- pvalueIndAnalysis(newObjectMA)
+head(pvalues$logFC)
+head(pvalues$p)
+```
